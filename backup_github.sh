@@ -224,16 +224,15 @@ echo "==================================="
 echo ""
 
 # Process each repository
-OLD_IFS=$IFS
-IFS=$(printf '\n')
-printf '%s\n' "$repo_data" | while IFS= read -r line; do
+while IFS= read -r line; do
     if [ -n "$line" ]; then
         repo_name=$(echo "$line" | cut -d'|' -f1)
         clone_url=$(echo "$line" | cut -d'|' -f2)
         backup_repository "$repo_name" "$clone_url"
     fi
-done
-IFS=$OLD_IFS
+done <<EOF
+$repo_data
+EOF
 
 echo "==================================="
 echo "Backup completed!"
