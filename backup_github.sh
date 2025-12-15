@@ -128,6 +128,11 @@ checkout_default_branch() {
     fi
 }
 
+# Helper function to get remote branches
+get_remote_branches() {
+    git branch -r | grep -v '\->' | sed 's/origin\///'
+}
+
 # Function to clone or update a repository with all branches
 backup_repository() {
     local repo_name=$1
@@ -143,7 +148,7 @@ backup_repository() {
         git fetch --all --prune
         
         # Get list of all remote branches
-        remote_branches=$(git branch -r | grep -v '\->' | sed 's/origin\///')
+        remote_branches=$(get_remote_branches)
         
         # Update each branch
         for branch in $remote_branches; do
@@ -177,7 +182,7 @@ backup_repository() {
             git fetch --all
             
             # Get list of all remote branches and create local tracking branches
-            remote_branches=$(git branch -r | grep -v '\->' | sed 's/origin\///')
+            remote_branches=$(get_remote_branches)
             
             for branch in $remote_branches; do
                 branch=$(echo "$branch" | xargs)  # Trim whitespace
