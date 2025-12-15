@@ -65,7 +65,7 @@ get_repositories() {
     local user=$1
     local page=1
     local per_page=100
-    local repos=()
+    local all_repos=""
     
     while true; do
         local url="https://api.github.com/users/$user/repos?page=$page&per_page=$per_page&type=all"
@@ -91,11 +91,41 @@ get_repositories() {
             break
         fi
         
-        repos+=("$page_repos")
+        # Append to all repos with newline separator
+        if [ -z "$all_repos" ]; then
+            all_repos="$page_repos"
+        else
+            all_repos="${all_repos}"$'\n'"${page_repos}"
+        fi
         ((page++))
     done
     
-    echo "${repos[@]}"
+    echo "$all_repos"
+}
+
+# Helper function to get default branch
+get_default_branch() {
+    local default_branch=$(git remote show origin | grep 'HEAD branch' | cut -d' ' -f5)
+    if [ -n "$default_branch" ]; then
+        echo "$default_branch"
+    else
+        # Fallback to common default branch names
+        if git show-ref --verify --quiet refs/heads/main; then
+            echo "main"
+        elif git show-ref --verify --quiet refs/heads/master; then
+            echo "master"
+        else
+            echo ""
+        fi
+    fi
+}
+
+# Helper function to checkout default branch
+checkout_default_branch() {
+    local default_branch=$(get_default_branch)
+    if [ -n "$default_branch" ]; then
+        git checkout "$default_branch" 2>/dev/null || true
+    fi
 }
 
 # Function to clone or update a repository with all branches
@@ -123,7 +153,7 @@ backup_repository() {
             # Check if local branch exists
             if git show-ref --verify --quiet "refs/heads/$branch"; then
                 # Branch exists locally, check it out and pull
-                git checkout "$branch" 2>/dev/null || true
+                git checkout "$branch" 2>/dev/null || continue
                 git pull origin "$branch" 2>/dev/null || echo "      Could not pull $branch"
             else
                 # Branch doesn't exist locally, create it
@@ -132,10 +162,7 @@ backup_repository() {
         done
         
         # Return to default branch
-        default_branch=$(git remote show origin | grep 'HEAD branch' | cut -d' ' -f5)
-        if [ -n "$default_branch" ]; then
-            git checkout "$default_branch" 2>/dev/null || git checkout master 2>/dev/null || git checkout main 2>/dev/null || true
-        fi
+        checkout_default_branch
         
         cd ..
         echo "  ✓ Updated successfully"
@@ -159,15 +186,12 @@ backup_repository() {
                 current_branch=$(git rev-parse --abbrev-ref HEAD)
                 if [ "$branch" != "$current_branch" ]; then
                     echo "    Creating local branch: $branch"
-                    git checkout -b "$branch" "origin/$branch" 2>/dev/null || true
+                    git checkout -b "$branch" "origin/$branch" 2>/dev/null || echo "      Could not create branch $branch"
                 fi
             done
             
             # Return to default branch
-            default_branch=$(git remote show origin | grep 'HEAD branch' | cut -d' ' -f5)
-            if [ -n "$default_branch" ]; then
-                git checkout "$default_branch" 2>/dev/null || git checkout master 2>/dev/null || git checkout main 2>/dev/null || true
-            fi
+            checkout_default_branch
             
             cd ..
             echo "  ✓ Cloned successfully"
