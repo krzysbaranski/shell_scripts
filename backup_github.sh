@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/sh
 
 # GitHub Backup Script
 # This script backs up all repositories from a GitHub user account
@@ -31,7 +31,7 @@ BACKUP_DIR="${1:-$DEFAULT_BACKUP_DIR}"
 GITHUB_USER="${2:-$DEFAULT_USER}"
 
 # Check if jq is installed (for JSON parsing)
-if ! command -v jq &> /dev/null; then
+if ! command -v jq >/dev/null 2>&1; then
     echo "Error: jq is required but not installed."
     echo "Please install jq: sudo apt-get install jq (Debian/Ubuntu) or sudo pacman -S jq (Arch)"
     exit 1
@@ -95,9 +95,10 @@ get_repositories() {
         if [ -z "$all_repos" ]; then
             all_repos="$page_repos"
         else
-            all_repos="${all_repos}"$'\n'"${page_repos}"
+            all_repos="${all_repos}
+${page_repos}"
         fi
-        ((page++))
+        page=$((page + 1))
     done
     
     echo "$all_repos"
@@ -224,13 +225,13 @@ echo "==================================="
 echo ""
 
 # Process each repository
-while IFS= read -r line; do
+printf '%s\n' "$repo_data" | while IFS= read -r line; do
     if [ -n "$line" ]; then
         repo_name=$(echo "$line" | cut -d'|' -f1)
         clone_url=$(echo "$line" | cut -d'|' -f2)
         backup_repository "$repo_name" "$clone_url"
     fi
-done <<< "$repo_data"
+done
 
 echo "==================================="
 echo "Backup completed!"
