@@ -225,9 +225,8 @@ echo ""
 
 # Process each repository
 OLD_IFS=$IFS
-IFS='
-'
-for line in $repo_data; do
+IFS=$(printf '\n')
+printf '%s\n' "$repo_data" | while IFS= read -r line; do
     if [ -n "$line" ]; then
         repo_name=$(echo "$line" | cut -d'|' -f1)
         clone_url=$(echo "$line" | cut -d'|' -f2)
