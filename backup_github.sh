@@ -65,9 +65,6 @@ get_repositories() {
     local user=$1
     local page=1
     local per_page=100
-    local all_repos=""
-    local NEWLINE
-    NEWLINE=$(printf '\n')
     
     while true; do
         local url="https://api.github.com/users/$user/repos?page=$page&per_page=$per_page&type=all"
@@ -93,16 +90,10 @@ get_repositories() {
             break
         fi
         
-        # Append to all repos with newline separator
-        if [ -z "$all_repos" ]; then
-            all_repos="$page_repos"
-        else
-            all_repos="${all_repos}${NEWLINE}${page_repos}"
-        fi
+        # Output page repositories
+        printf '%s\n' "$page_repos"
         page=$((page + 1))
     done
-    
-    echo "$all_repos"
 }
 
 # Helper function to get default branch
@@ -226,16 +217,13 @@ echo "==================================="
 echo ""
 
 # Process each repository
-# Use heredoc instead of a here-string for BusyBox /bin/sh compatibility
-while IFS= read -r line; do
+printf '%s\n' "$repo_data" | while IFS= read -r line; do
     if [ -n "$line" ]; then
         repo_name=$(echo "$line" | cut -d'|' -f1)
         clone_url=$(echo "$line" | cut -d'|' -f2)
         backup_repository "$repo_name" "$clone_url"
     fi
-done <<REPO_DATA_END
-$repo_data
-REPO_DATA_END
+done
 
 echo "==================================="
 echo "Backup completed!"
