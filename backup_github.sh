@@ -66,6 +66,8 @@ get_repositories() {
     local page=1
     local per_page=100
     local all_repos=""
+    local NL
+    NL=$(printf '\n')
     
     while true; do
         local url="https://api.github.com/users/$user/repos?page=$page&per_page=$per_page&type=all"
@@ -95,7 +97,7 @@ get_repositories() {
         if [ -z "$all_repos" ]; then
             all_repos="$page_repos"
         else
-            all_repos=$(printf "%s\n%s" "$all_repos" "$page_repos")
+            all_repos="${all_repos}${NL}${page_repos}"
         fi
         page=$((page + 1))
     done
@@ -224,6 +226,7 @@ echo "==================================="
 echo ""
 
 # Process each repository
+# Use heredoc instead of a here-string for BusyBox /bin/sh compatibility
 while IFS= read -r line; do
     if [ -n "$line" ]; then
         repo_name=$(echo "$line" | cut -d'|' -f1)
