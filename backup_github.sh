@@ -95,8 +95,7 @@ get_repositories() {
         if [ -z "$all_repos" ]; then
             all_repos="$page_repos"
         else
-            all_repos="${all_repos}
-${page_repos}"
+            all_repos=$(printf "%s\n%s" "$all_repos" "$page_repos")
         fi
         page=$((page + 1))
     done
@@ -225,13 +224,17 @@ echo "==================================="
 echo ""
 
 # Process each repository
-printf '%s\n' "$repo_data" | while IFS= read -r line; do
+OLD_IFS=$IFS
+IFS='
+'
+for line in $repo_data; do
     if [ -n "$line" ]; then
         repo_name=$(echo "$line" | cut -d'|' -f1)
         clone_url=$(echo "$line" | cut -d'|' -f2)
         backup_repository "$repo_name" "$clone_url"
     fi
 done
+IFS=$OLD_IFS
 
 echo "==================================="
 echo "Backup completed!"
