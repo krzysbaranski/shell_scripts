@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/sh
 
 # GitHub Backup Script
 # This script backs up all repositories from a GitHub user account
@@ -31,7 +31,7 @@ BACKUP_DIR="${1:-$DEFAULT_BACKUP_DIR}"
 GITHUB_USER="${2:-$DEFAULT_USER}"
 
 # Check if jq is installed (for JSON parsing)
-if ! command -v jq &> /dev/null; then
+if ! command -v jq >/dev/null 2>&1; then
     echo "Error: jq is required but not installed."
     echo "Please install jq: sudo apt-get install jq (Debian/Ubuntu) or sudo pacman -S jq (Arch)"
     exit 1
@@ -65,7 +65,6 @@ get_repositories() {
     local user=$1
     local page=1
     local per_page=100
-    local all_repos=""
     
     while true; do
         local url="https://api.github.com/users/$user/repos?page=$page&per_page=$per_page&type=all"
@@ -91,16 +90,10 @@ get_repositories() {
             break
         fi
         
-        # Append to all repos with newline separator
-        if [ -z "$all_repos" ]; then
-            all_repos="$page_repos"
-        else
-            all_repos="${all_repos}"$'\n'"${page_repos}"
-        fi
-        ((page++))
+        # Output page repositories
+        printf '%s\n' "$page_repos"
+        page=$((page + 1))
     done
-    
-    echo "$all_repos"
 }
 
 # Helper function to get default branch
@@ -224,13 +217,13 @@ echo "==================================="
 echo ""
 
 # Process each repository
-while IFS= read -r line; do
+printf '%s\n' "$repo_data" | while IFS= read -r line; do
     if [ -n "$line" ]; then
         repo_name=$(echo "$line" | cut -d'|' -f1)
         clone_url=$(echo "$line" | cut -d'|' -f2)
         backup_repository "$repo_name" "$clone_url"
     fi
-done <<< "$repo_data"
+done
 
 echo "==================================="
 echo "Backup completed!"
