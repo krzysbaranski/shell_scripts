@@ -14,19 +14,37 @@
 #    Or add it to your ~/.bashrc or ~/.zshrc for persistence
 #
 # Usage:
-#   ./backup_github.sh [backup_directory] [github_username]
+#   ./backup_github.sh [OPTIONS] [backup_directory] [github_username]
+#   
+# Options:
+#   --mirror    Use mirror clones (bare repositories, more space-efficient)
+#               Mirror clones include all branches, tags, and pull request refs
 #   
 # Examples:
 #   ./backup_github.sh ~/backups/github krzysbaranski
-#   GITHUB_TOKEN=xxx ./backup_github.sh ~/backups/github krzysbaranski
+#   ./backup_github.sh --mirror ~/backups/github krzysbaranski
+#   GITHUB_TOKEN=xxx ./backup_github.sh --mirror ~/backups/github krzysbaranski
 
 set -e  # Exit on error
 
 # Default values
 DEFAULT_USER="krzysbaranski"
 DEFAULT_BACKUP_DIR="$HOME/github_backup"
+USE_MIRROR=0
 
 # Parse arguments
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --mirror)
+            USE_MIRROR=1
+            shift
+            ;;
+        *)
+            break
+            ;;
+    esac
+done
+
 BACKUP_DIR="${1:-$DEFAULT_BACKUP_DIR}"
 GITHUB_USER="${2:-$DEFAULT_USER}"
 
@@ -46,6 +64,11 @@ echo "GitHub Backup Script"
 echo "==================================="
 echo "User: $GITHUB_USER"
 echo "Backup directory: $BACKUP_DIR"
+if [ $USE_MIRROR -eq 1 ]; then
+    echo "Mode: Mirror clone (bare repository)"
+else
+    echo "Mode: Regular clone (with working directory)"
+fi
 echo "-----------------------------------"
 
 # Prepare API headers
@@ -133,6 +156,47 @@ backup_repository() {
     
     echo "Processing: $repo_name"
     
+    if [ $USE_MIRROR -eq 1 ]; then
+        backup_repository_mirror "$repo_name" "$clone_url"
+    else
+        backup_repository_regular "$repo_name" "$clone_url"
+    fi
+    
+    echo ""
+}
+
+# Function to backup using mirror clone
+backup_repository_mirror() {
+    local repo_name=$1
+    local clone_url=$2
+    local mirror_name="${repo_name}.git"
+    
+    if [ -d "$mirror_name" ]; then
+        echo "  Mirror exists, updating..."
+        cd "$mirror_name"
+        
+        # Update all refs
+        git remote update --prune
+        
+        cd ..
+        echo "  ✓ Updated successfully"
+    else
+        echo "  Creating mirror clone..."
+        git clone --mirror "$clone_url" "$mirror_name"
+        
+        if [ -d "$mirror_name" ]; then
+            echo "  ✓ Cloned successfully"
+        else
+            echo "  ✗ Failed to clone"
+        fi
+    fi
+}
+
+# Function to backup using regular clone
+backup_repository_regular() {
+    local repo_name=$1
+    local clone_url=$2
+    
     if [ -d "$repo_name" ]; then
         echo "  Repository exists, updating..."
         cd "$repo_name"
@@ -197,8 +261,6 @@ backup_repository() {
             echo "  ✗ Failed to clone"
         fi
     fi
-    
-    echo ""
 }
 
 # Main backup process
