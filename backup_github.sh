@@ -19,10 +19,13 @@
 # Options:
 #   --mirror    Use mirror clones (bare repositories, more space-efficient)
 #               Mirror clones include all branches, tags, and pull request refs
+#   --starred   Download all repositories starred by the user instead of owned repos
 #   
 # Examples:
 #   ./backup_github.sh ~/backups/github krzysbaranski
 #   ./backup_github.sh --mirror ~/backups/github krzysbaranski
+#   ./backup_github.sh --starred ~/backups/github krzysbaranski
+#   ./backup_github.sh --starred --mirror ~/backups/github krzysbaranski
 #   GITHUB_TOKEN=xxx ./backup_github.sh --mirror ~/backups/github krzysbaranski
 
 set -e  # Exit on error
@@ -31,12 +34,17 @@ set -e  # Exit on error
 DEFAULT_USER="krzysbaranski"
 DEFAULT_BACKUP_DIR="$HOME/github_backup"
 USE_MIRROR=0
+USE_STARRED=0
 
 # Parse arguments
 while [ $# -gt 0 ]; do
     case "$1" in
         --mirror)
             USE_MIRROR=1
+            shift
+            ;;
+        --starred)
+            USE_STARRED=1
             shift
             ;;
         *)
@@ -64,6 +72,11 @@ echo "GitHub Backup Script"
 echo "==================================="
 echo "User: $GITHUB_USER"
 echo "Backup directory: $BACKUP_DIR"
+if [ $USE_STARRED -eq 1 ]; then
+    echo "Source: Starred repositories"
+else
+    echo "Source: User's own repositories"
+fi
 if [ $USE_MIRROR -eq 1 ]; then
     echo "Mode: Mirror clone (bare repository)"
 else
@@ -119,6 +132,42 @@ get_repositories() {
     done
 }
 
+# Function to get all starred repositories for a user
+get_starred_repositories() {
+    local user=$1
+    local page=1
+    local per_page=100
+    
+    while true; do
+        local url="https://api.github.com/users/$user/starred?page=$page&per_page=$per_page"
+        
+        if [ -n "$AUTH_HEADER" ]; then
+            response=$(curl -s -H "$AUTH_HEADER" "$url")
+        else
+            response=$(curl -s "$url")
+        fi
+        
+        # Check for API errors
+        if echo "$response" | jq -e '.message' > /dev/null 2>&1; then
+            error_msg=$(echo "$response" | jq -r '.message')
+            echo "Error from GitHub API: $error_msg"
+            exit 1
+        fi
+        
+        # Parse repository full names and clone URLs
+        page_repos=$(echo "$response" | jq -r '.[] | "\(.full_name)|\(.clone_url)"')
+        
+        # Break if no more repositories
+        if [ -z "$page_repos" ]; then
+            break
+        fi
+        
+        # Output page repositories
+        printf '%s\n' "$page_repos"
+        page=$((page + 1))
+    done
+}
+
 # Helper function to get default branch
 get_default_branch() {
     local default_branch=$(git remote show origin | grep 'HEAD branch' | cut -d' ' -f5)
@@ -156,6 +205,13 @@ backup_repository() {
     
     echo "Processing: $repo_name"
     
+    # Create parent directory if repo_name contains a path (e.g., for starred repos)
+    local parent_dir
+    parent_dir=$(dirname "$repo_name")
+    if [ "$parent_dir" != "." ]; then
+        mkdir -p "$parent_dir"
+    fi
+    
     if [ $USE_MIRROR -eq 1 ]; then
         backup_repository_mirror "$repo_name" "$clone_url"
     else
@@ -178,7 +234,7 @@ backup_repository_mirror() {
         # Update all refs
         git remote update --prune
         
-        cd ..
+        cd "$BACKUP_DIR"
         echo "  ✓ Updated successfully"
     else
         echo "  Creating mirror clone..."
@@ -226,7 +282,7 @@ backup_repository_regular() {
         # Return to default branch
         checkout_default_branch
         
-        cd ..
+        cd "$BACKUP_DIR"
         echo "  ✓ Updated successfully"
     else
         echo "  Cloning repository..."
@@ -255,7 +311,7 @@ backup_repository_regular() {
             # Return to default branch
             checkout_default_branch
             
-            cd ..
+            cd "$BACKUP_DIR"
             echo "  ✓ Cloned successfully"
         else
             echo "  ✗ Failed to clone"
@@ -265,7 +321,11 @@ backup_repository_regular() {
 
 # Main backup process
 echo "Fetching repository list..."
-repo_data=$(get_repositories "$GITHUB_USER")
+if [ $USE_STARRED -eq 1 ]; then
+    repo_data=$(get_starred_repositories "$GITHUB_USER")
+else
+    repo_data=$(get_repositories "$GITHUB_USER")
+fi
 
 if [ -z "$repo_data" ]; then
     echo "No repositories found for user: $GITHUB_USER"
