@@ -17,6 +17,7 @@ Backs up all repositories from a GitHub user account.
 - Supports both authenticated (with GitHub token) and unauthenticated API access
 - Handles pagination for users with many repositories
 - **New**: Mirror clone mode for space-efficient backups (60-70% smaller)
+- **New**: Download starred repositories with `--starred` flag
 
 #### Requirements
 - `jq` - Command-line JSON processor
@@ -57,6 +58,9 @@ For higher rate limits and access to private repositories, generate a GitHub API
   - Includes all branches, tags, and pull request refs
   - No working directory (stores only git data)
   - Perfect for backups and archives
+- `--starred` - Download all repositories starred by the user instead of their own repos
+  - Starred repos are organized in `owner/repo` subdirectories to avoid name collisions
+  - Can be combined with `--mirror` for space-efficient backups of starred repos
 
 **Examples:**
 
@@ -69,6 +73,12 @@ For higher rate limits and access to private repositories, generate a GitHub API
 
 # Use mirror clones for space-efficient backups
 ./backup_github.sh --mirror ~/backups/github krzysbaranski
+
+# Download all starred repositories
+./backup_github.sh --starred ~/backups/github krzysbaranski
+
+# Starred repositories with mirror clones
+./backup_github.sh --starred --mirror ~/backups/github krzysbaranski
 
 # With authentication token
 GITHUB_TOKEN=ghp_xxxxxxxxxxxx ./backup_github.sh ~/backups/github krzysbaranski
@@ -101,6 +111,12 @@ export GITHUB_TOKEN=ghp_xxxxxxxxxxxx
    - If the mirror exists locally: updates all refs (branches, tags, pull requests)
 3. Mirror clones are bare repositories (no working directory) and are 60-70% smaller than regular clones
 4. Mirror clones include all repository refs including pull request refs that regular clones don't have
+
+**Starred mode (`--starred` flag):**
+1. Fetches a list of all repositories starred by the specified user
+2. Repositories are organized in `owner/repo` subdirectories to avoid name collisions
+3. Each repository is cloned or updated using the same logic as regular or mirror mode
+4. Can be combined with `--mirror` for space-efficient backups
 
 #### Rate Limits
 
