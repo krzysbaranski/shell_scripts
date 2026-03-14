@@ -17,15 +17,17 @@
 #   ./backup_github.sh [OPTIONS] [backup_directory] [github_username]
 #   
 # Options:
-#   --mirror    Use mirror clones (bare repositories, more space-efficient)
-#               Mirror clones include all branches, tags, and pull request refs
-#   --starred   Download all repositories starred by the user instead of owned repos
+#   --mirror          Use mirror clones (bare repositories, more space-efficient)
+#                     Mirror clones include all branches, tags, and pull request refs
+#   --starred         Download all repositories starred by the user instead of owned repos
+#   --single-branch   Clone only the default branch (faster, uses less disk space)
 #   
 # Examples:
 #   ./backup_github.sh ~/backups/github krzysbaranski
 #   ./backup_github.sh --mirror ~/backups/github krzysbaranski
 #   ./backup_github.sh --starred ~/backups/github krzysbaranski
 #   ./backup_github.sh --starred --mirror ~/backups/github krzysbaranski
+#   ./backup_github.sh --single-branch ~/backups/github krzysbaranski
 #   GITHUB_TOKEN=xxx ./backup_github.sh --mirror ~/backups/github krzysbaranski
 
 set -e  # Exit on error
@@ -35,6 +37,7 @@ DEFAULT_USER="krzysbaranski"
 DEFAULT_BACKUP_DIR="$HOME/github_backup"
 USE_MIRROR=0
 USE_STARRED=0
+USE_SINGLE_BRANCH=0
 
 # Parse arguments
 while [ $# -gt 0 ]; do
@@ -47,6 +50,10 @@ while [ $# -gt 0 ]; do
             USE_STARRED=1
             shift
             ;;
+        --single-branch)
+            USE_SINGLE_BRANCH=1
+            shift
+            ;;
         *)
             break
             ;;
@@ -55,6 +62,13 @@ done
 
 BACKUP_DIR="${1:-$DEFAULT_BACKUP_DIR}"
 GITHUB_USER="${2:-$DEFAULT_USER}"
+
+# Validate incompatible options
+if [ $USE_MIRROR -eq 1 ] && [ $USE_SINGLE_BRANCH -eq 1 ]; then
+    echo "Error: --single-branch and --mirror are incompatible."
+    echo "Mirror clones always include all branches and refs."
+    exit 1
+fi
 
 # Check if jq is installed (for JSON parsing)
 if ! command -v jq >/dev/null 2>&1; then
@@ -81,6 +95,9 @@ if [ $USE_MIRROR -eq 1 ]; then
     echo "Mode: Mirror clone (bare repository)"
 else
     echo "Mode: Regular clone (with working directory)"
+fi
+if [ $USE_SINGLE_BRANCH -eq 1 ]; then
+    echo "Branch: Single branch (default branch only)"
 fi
 echo "-----------------------------------"
 
@@ -257,61 +274,72 @@ backup_repository_regular() {
         echo "  Repository exists, updating..."
         cd "$repo_name"
         
-        # Fetch all remote branches
-        git fetch --all --prune
-        
-        # Get list of all remote branches
-        remote_branches=$(get_remote_branches)
-        
-        # Update each branch
-        for branch in $remote_branches; do
-            branch=$(echo "$branch" | xargs)  # Trim whitespace
-            echo "    Updating branch: $branch"
+        if [ $USE_SINGLE_BRANCH -eq 1 ]; then
+            # Only update the currently checked-out branch
+            git pull 2>/dev/null || echo "      Could not pull current branch"
+        else
+            # Fetch all remote branches
+            git fetch --all --prune
             
-            # Check if local branch exists
-            if git show-ref --verify --quiet "refs/heads/$branch"; then
-                # Branch exists locally, check it out and pull
-                git checkout "$branch" 2>/dev/null || continue
-                git pull origin "$branch" 2>/dev/null || echo "      Could not pull $branch"
-            else
-                # Branch doesn't exist locally, create it
-                git checkout -b "$branch" "origin/$branch" 2>/dev/null || echo "      Could not checkout $branch"
-            fi
-        done
-        
-        # Return to default branch
-        checkout_default_branch
-        
-        cd "$BACKUP_DIR"
-        echo "  ✓ Updated successfully"
-    else
-        echo "  Cloning repository..."
-        git clone "$clone_url" "$repo_name"
-        
-        if [ -d "$repo_name" ]; then
-            cd "$repo_name"
-            
-            # Fetch all branches
-            git fetch --all
-            
-            # Get list of all remote branches and create local tracking branches
+            # Get list of all remote branches
             remote_branches=$(get_remote_branches)
             
+            # Update each branch
             for branch in $remote_branches; do
                 branch=$(echo "$branch" | xargs)  # Trim whitespace
+                echo "    Updating branch: $branch"
                 
-                # Check if we're not already on this branch
-                current_branch=$(git rev-parse --abbrev-ref HEAD)
-                if [ "$branch" != "$current_branch" ]; then
-                    echo "    Creating local branch: $branch"
-                    git checkout -b "$branch" "origin/$branch" 2>/dev/null || echo "      Could not create branch $branch"
+                # Check if local branch exists
+                if git show-ref --verify --quiet "refs/heads/$branch"; then
+                    # Branch exists locally, check it out and pull
+                    git checkout "$branch" 2>/dev/null || continue
+                    git pull origin "$branch" 2>/dev/null || echo "      Could not pull $branch"
+                else
+                    # Branch doesn't exist locally, create it
+                    git checkout -b "$branch" "origin/$branch" 2>/dev/null || echo "      Could not checkout $branch"
                 fi
             done
             
             # Return to default branch
             checkout_default_branch
-            
-            cd "$BACKUP_DIR"
+        fi
+        
+        cd "$BACKUP_DIR"
+        echo "  ✓ Updated successfully"
+    else
+        echo "  Cloning repository..."
+        if [ $USE_SINGLE_BRANCH -eq 1 ]; then
+            git clone --single-branch "$clone_url" "$repo_name"
+        else
+            git clone "$clone_url" "$repo_name"
+        fi
+        
+        if [ -d "$repo_name" ]; then
+            if [ $USE_SINGLE_BRANCH -eq 0 ]; then
+                cd "$repo_name"
+                
+                # Fetch all branches
+                git fetch --all
+                
+                # Get list of all remote branches and create local tracking branches
+                remote_branches=$(get_remote_branches)
+                
+                for branch in $remote_branches; do
+                    branch=$(echo "$branch" | xargs)  # Trim whitespace
+                    
+                    # Check if we're not already on this branch
+                    current_branch=$(git rev-parse --abbrev-ref HEAD)
+                    if [ "$branch" != "$current_branch" ]; then
+                        echo "    Creating local branch: $branch"
+                        git checkout -b "$branch" "origin/$branch" 2>/dev/null || echo "      Could not create branch $branch"
+                    fi
+                done
+                
+                # Return to default branch
+                checkout_default_branch
+                
+                cd "$BACKUP_DIR"
+            fi
             echo "  ✓ Cloned successfully"
         else
             echo "  ✗ Failed to clone"
