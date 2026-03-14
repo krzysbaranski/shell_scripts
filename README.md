@@ -18,6 +18,7 @@ Backs up all repositories from a GitHub user account.
 - Handles pagination for users with many repositories
 - **New**: Mirror clone mode for space-efficient backups (60-70% smaller)
 - **New**: Download starred repositories with `--starred` flag
+- **New**: Single-branch mode to clone only the default branch with `--single-branch` flag
 
 #### Requirements
 - `jq` - Command-line JSON processor
@@ -61,6 +62,9 @@ For higher rate limits and access to private repositories, generate a GitHub API
 - `--starred` - Download all repositories starred by the user instead of their own repos
   - Starred repos are organized in `owner/repo` subdirectories to avoid name collisions
   - Can be combined with `--mirror` for space-efficient backups of starred repos
+- `--single-branch` - Clone only the default branch (faster and uses less disk space)
+  - Skips fetching all remote branches during clone and updates
+  - Useful when you only need the latest state of the main/master branch
 
 **Examples:**
 
@@ -79,6 +83,12 @@ For higher rate limits and access to private repositories, generate a GitHub API
 
 # Starred repositories with mirror clones
 ./backup_github.sh --starred --mirror ~/backups/github krzysbaranski
+
+# Clone only the default branch (faster, less disk space)
+./backup_github.sh --single-branch ~/backups/github krzysbaranski
+
+# Single branch with starred repositories
+./backup_github.sh --single-branch --starred ~/backups/github krzysbaranski
 
 # With authentication token
 GITHUB_TOKEN=ghp_xxxxxxxxxxxx ./backup_github.sh ~/backups/github krzysbaranski
@@ -117,6 +127,12 @@ export GITHUB_TOKEN=ghp_xxxxxxxxxxxx
 2. Repositories are organized in `owner/repo` subdirectories to avoid name collisions
 3. Each repository is cloned or updated using the same logic as regular or mirror mode
 4. Can be combined with `--mirror` for space-efficient backups
+
+**Single-branch mode (`--single-branch` flag):**
+1. Clones only the default branch of each repository (no extra branches are fetched)
+2. When updating an existing repository, only the currently checked-out branch is pulled
+3. Faster and uses less disk space — ideal when full branch history is not needed
+4. Can be combined with `--starred` to clone only the default branch of starred repos
 
 #### Rate Limits
 
