@@ -38,6 +38,7 @@ DEFAULT_BACKUP_DIR="$HOME/github_backup"
 USE_MIRROR=0
 USE_STARRED=0
 USE_SINGLE_BRANCH=0
+GIT_TERMINAL_PROMPT=0
 
 # Parse arguments
 while [ $# -gt 0 ]; do
@@ -255,7 +256,7 @@ backup_repository_mirror() {
         echo "  ✓ Updated successfully"
     else
         echo "  Creating mirror clone..."
-        git clone --mirror "$clone_url" "$mirror_name"
+        git clone --mirror "$clone_url" "$mirror_name" || echo "Skipped ${clone_url} due to error"
         
         if [ -d "$mirror_name" ]; then
             echo "  ✓ Cloned successfully"
@@ -309,9 +310,9 @@ backup_repository_regular() {
     else
         echo "  Cloning repository..."
         if [ $USE_SINGLE_BRANCH -eq 1 ]; then
-            git clone --single-branch "$clone_url" "$repo_name"
+            git clone --single-branch "$clone_url" "$repo_name"  || echo "Skipped ${clone_url} due to error"
         else
-            git clone "$clone_url" "$repo_name"
+            git clone "$clone_url" "$repo_name" || echo "Skipped ${clone_url} due to error"
         fi
         
         if [ -d "$repo_name" ]; then
