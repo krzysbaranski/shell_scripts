@@ -64,12 +64,7 @@ done
 BACKUP_DIR="${1:-$DEFAULT_BACKUP_DIR}"
 GITHUB_USER="${2:-$DEFAULT_USER}"
 
-# Validate incompatible options
-if [ $USE_MIRROR -eq 1 ] && [ $USE_SINGLE_BRANCH -eq 1 ]; then
-    echo "Error: --single-branch and --mirror are incompatible."
-    echo "Mirror clones always include all branches and refs."
-    exit 1
-fi
+# No validation errors - all combinations are now supported
 
 # Check if jq is installed (for JSON parsing)
 if ! command -v jq >/dev/null 2>&1; then
@@ -244,20 +239,32 @@ backup_repository_mirror() {
     local repo_name=$1
     local clone_url=$2
     local mirror_name="${repo_name}.git"
-    
+
     if [ -d "$mirror_name" ]; then
         echo "  Mirror exists, updating..."
         cd "$mirror_name"
-        
-        # Update all refs
-        git remote update --prune
-        
+
+        if [ $USE_SINGLE_BRANCH -eq 1 ]; then
+            # Only fetch the default branch
+            git fetch origin 2>/dev/null || echo "      Could not fetch"
+        else
+            # Update all refs
+            git remote update --prune
+        fi
+
         cd "$BACKUP_DIR"
         echo "  ✓ Updated successfully"
     else
         echo "  Creating mirror clone..."
-        git clone --mirror "$clone_url" "$mirror_name" || echo "Skipped ${clone_url} due to error"
-        
+
+        if [ $USE_SINGLE_BRANCH -eq 1 ]; then
+            # Create a bare repo with only the single branch
+            git clone --bare --single-branch "$clone_url" "$mirror_name" || echo "Skipped ${clone_url} due to error"
+        else
+            # Create a full mirror clone
+            git clone --mirror "$clone_url" "$mirror_name" || echo "Skipped ${clone_url} due to error"
+        fi
+
         if [ -d "$mirror_name" ]; then
             echo "  ✓ Cloned successfully"
         else
